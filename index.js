@@ -6,6 +6,10 @@ require("dotenv").config();
 const app = express();
 app.use(bodyParser.json());
 
+// システムプロンプト（環境変数から取得）
+const systemPrompt =
+  process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
+
 app.post("/webhook", async (req, res) => {
   const events = req.body.events;
 
@@ -18,14 +22,17 @@ app.post("/webhook", async (req, res) => {
         "https://api.openai.com/v1/chat/completions",
         {
           model: "gpt-3.5-turbo",
-          messages: [{ role: "user", content: userMessage }],
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
         },
         {
           headers: {
             Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
             "Content-Type": "application/json",
           },
-        },
+        }
       );
 
       const replyMessage = gptResponse.data.choices[0].message.content;
@@ -42,7 +49,7 @@ app.post("/webhook", async (req, res) => {
             Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
             "Content-Type": "application/json",
           },
-        },
+        }
       );
     }
   }
@@ -53,6 +60,12 @@ app.post("/webhook", async (req, res) => {
 app.get("/", (req, res) => {
   res.send("LINE ChatGPT Bot is running!");
 });
+
+const port = process.env.PORT || 3000;
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Bot is running on port ${port}`);
+});
+
 
 const port = process.env.PORT || 3000;
 app.listen(port, "0.0.0.0", () => {
