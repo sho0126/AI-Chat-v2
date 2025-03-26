@@ -66,8 +66,3 @@ app.listen(port, "0.0.0.0", () => {
   console.log(`Bot is running on port ${port}`);
 });
 
-
-const port = process.env.PORT || 3000;
-app.listen(port, "0.0.0.0", () => {
-  console.log(`Bot is running on port ${port}`);
-});
