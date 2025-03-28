@@ -53,6 +53,7 @@ app.post("/webhook", async (req, res) => {
       const userMessage = event.message.text;
       const userId = event.source.userId;
 
+      // 補助金選択
       if (userMessage === "[小規模事業者持続化補助金]") {
         userContext[userId] = "/etc/secrets/hojokin_shokibo.txt";
         await pushMessageWithQuickReply(userId, "小規模事業者持続化補助金を選択しました。ご質問をどうぞ！");
@@ -65,22 +66,34 @@ app.post("/webhook", async (req, res) => {
         continue;
       }
 
+      // 補助金相談終了
       if (userMessage === "補助金相談を終了する") {
         delete userContext[userId];
         await pushMessage(userId, "補助金相談モードを終了しました。メニューから再度お選びください。");
         continue;
       }
 
+      // 補助金メニュー再表示
       if (userMessage === "補助金メニュー") {
         delete userContext[userId];
         await reply(event.replyToken, getHojokinCarousel());
         continue;
       }
 
+      // 👇 NEW: 他のメニュー選択で補助金モード終了
+      const otherMenus = ["経営相談", "業務改善Tips", "お問い合わせ"];
+      if (otherMenus.includes(userMessage)) {
+        if (userContext[userId]) {
+          delete userContext[userId];
+          await pushMessage(userId, "補助金相談モードを終了しました。他のご相談をどうぞ！");
+        }
+        continue;
+      }
+
+      // 補助金選択済み
       if (userContext[userId]) {
         const hojokinText = fs.readFileSync(userContext[userId], "utf8");
-        const systemPrompt =
-          "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。ネット検索や憶測は禁止です。";
+        const systemPrompt = "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。ネット検索や憶測は禁止です。";
 
         const messages = [
           { role: "system", content: `${systemPrompt}\n\n【資料】\n${hojokinText}` },
@@ -112,8 +125,8 @@ app.post("/webhook", async (req, res) => {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "補助金相談を終了する",
-                  text: "補助金相談を終了する"
+                  label: "よくある質問を見る",
+                  text: "よくある質問"
                 }
               },
               {
@@ -144,8 +157,8 @@ app.post("/webhook", async (req, res) => {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "よくある質問を見る",
-                  text: "よくある質問"
+                  label: "補助金相談を終了する",
+                  text: "補助金相談を終了する"
                 }
               }
             ]
@@ -154,6 +167,7 @@ app.post("/webhook", async (req, res) => {
         continue;
       }
 
+      // 通常会話
       const systemPrompt = process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
 
       const gptResponse = await axios.post(
@@ -181,6 +195,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
+// LINEへの返信
 const reply = async (replyToken, message) => {
   await axios.post(
     "https://api.line.me/v2/bot/message/reply",
@@ -197,6 +212,7 @@ const reply = async (replyToken, message) => {
   );
 };
 
+// 通常Push
 const pushMessage = async (to, message) => {
   await axios.post(
     "https://api.line.me/v2/bot/message/push",
@@ -213,6 +229,7 @@ const pushMessage = async (to, message) => {
   );
 };
 
+// QuickReply付きPush
 const pushMessageWithQuickReply = async (to, message) => {
   await axios.post(
     "https://api.line.me/v2/bot/message/push",
@@ -228,8 +245,8 @@ const pushMessageWithQuickReply = async (to, message) => {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "補助金相談を終了する",
-                  text: "補助金相談を終了する"
+                  label: "よくある質問を見る",
+                  text: "よくある質問"
                 }
               },
               {
@@ -260,8 +277,8 @@ const pushMessageWithQuickReply = async (to, message) => {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "よくある質問を見る",
-                  text: "よくある質問"
+                  label: "補助金相談を終了する",
+                  text: "補助金相談を終了する"
                 }
               }
             ]
@@ -278,6 +295,7 @@ const pushMessageWithQuickReply = async (to, message) => {
   );
 };
 
+// Web上で確認用
 app.get("/", (req, res) => {
   res.send("LINE ChatGPT Bot is running!");
 });
@@ -286,3 +304,4 @@ const port = process.env.PORT || 3000;
 app.listen(port, "0.0.0.0", () => {
   console.log(`Bot is running on port ${port}`);
 });
+
