@@ -238,14 +238,7 @@ const pushMessageWithQuickReply = async (to, message) => {
     }
   );
 };
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-};
+
 
 app.get("/", (req, res) => {
   res.send("LINE ChatGPT Bot is running!");
