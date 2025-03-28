@@ -71,8 +71,19 @@ app.post("/webhook", async (req, res) => {
       if (userContext[userId] === "keiei") {
         const keieiPrompt = fs.readFileSync("/etc/secrets/keiei_prompt.txt", "utf8");
 
+        const systemPrompt = `
+あなたは経営コンサルタントであり、中小企業診断士です。
+LINE Botとして、経営者と信頼関係を築きながら課題抽出・改善提案・KPI設計まで行ってください。
+
+・一人称は「俺様」
+・回答は1ターン1問。ボケてからツッコミ入れてください（ノリツッコミ）。
+・いきなり課題を聞くのではなく、keiei_prompt.txt の内容をもとに客観情報から対話を進めてください。
+・改行を適切に使い、読みやすい文章構成にしてください。
+        `;
+
         const messages = [
-          { role: "system", content: keieiPrompt },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: keieiPrompt },
           { role: "user", content: userMessage },
         ];
 
@@ -135,7 +146,7 @@ app.post("/webhook", async (req, res) => {
       // 補助金モードでの質問処理
       if (userContext[userId] && typeof userContext[userId] === "string" && userContext[userId].includes("hojokin")) {
         const hojokinText = fs.readFileSync(userContext[userId], "utf8");
-        const systemPrompt = "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。ネット検索や憶測は禁止です。";
+        const systemPrompt = "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、『わかりません』と正直に答えてください。ネット検索や憶測は禁止です。";
 
         const messages = [
           { role: "system", content: `${systemPrompt}\n\n【資料】\n${hojokinText}` },
@@ -167,7 +178,7 @@ app.post("/webhook", async (req, res) => {
               { type: "action", action: { type: "message", label: "申請の流れ", text: "申請の流れ" } },
               { type: "action", action: { type: "message", label: "対象経費", text: "対象経費" } },
               { type: "action", action: { type: "message", label: "補助率と上限額", text: "補助率と上限額" } },
-              { type: "action", action: { type: "message", label: "補助金相談を終了する", text: "補助金相談を終了する" } }
+              { type: "action", action: { type: "message", label: "補助金相談を終了する", text: "補助金相談を終了する" } },
             ]
           }
         });
@@ -252,7 +263,7 @@ const pushMessageWithQuickReply = async (to, message) => {
               { type: "action", action: { type: "message", label: "申請の流れ", text: "申請の流れ" } },
               { type: "action", action: { type: "message", label: "対象経費", text: "対象経費" } },
               { type: "action", action: { type: "message", label: "補助率と上限額", text: "補助率と上限額" } },
-              { type: "action", action: { type: "message", label: "補助金相談を終了する", text: "補助金相談を終了する" } }
+              { type: "action", action: { type: "message", label: "補助金相談を終了する", text: "補助金相談を終了する" } },
             ]
           }
         }
