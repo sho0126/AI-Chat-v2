@@ -189,23 +189,55 @@ const pushMessageWithQuickReply = async (to, message) => {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "補助金メニューに戻る",
-                  text: "補助金メニュー",
-                },
+                  label: "よくある質問を見る",
+                  text: "よくある質問"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "申請の流れを知りたい",
+                  text: "申請の流れ"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "対象経費は？",
+                  text: "対象経費"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "補助率と上限額は？",
+                  text: "補助率と上限額"
+                }
               },
               {
                 type: "action",
                 action: {
                   type: "message",
                   label: "補助金相談を終了する",
-                  text: "補助金相談を終了する",
-                },
-              },
-            ],
-          },
-        },
-      ],
+                  text: "補助金相談を終了する"
+                }
+              }
+            ]
+          }
+        }
+      ]
     },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json"
+      }
+    }
+  );
+};
     {
       headers: {
         Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
