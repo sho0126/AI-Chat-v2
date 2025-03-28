@@ -56,7 +56,7 @@ app.post("/webhook", async (req, res) => {
       // 経営相談モード開始
       if (userMessage === "経営相談") {
         userContext[userId] = "keiei";
-        await pushMessage(userId, "経営相談モードを開始しました。お気軽にお悩みをお話しください。\n\n※「経営相談を終了する」で通常モードに戻ります。");
+        await pushMessage(userId, "まず、現在の事業内容を簡単にお聞かせください。\n\n※「経営相談を終了する」で通常モードに戻ります。");
         continue;
       }
 
