@@ -77,8 +77,9 @@ app.post("/webhook", async (req, res) => {
       // 補助金選択済み → GPTに問い合わせ
       if (userContext[userId]) {
         const hojokinText = fs.readFileSync(userContext[userId], "utf8");
+
         const systemPrompt =
-          process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
+          "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。ネット検索や憶測は禁止です。";
 
         const messages = [
           { role: "system", content: `${systemPrompt}\n\n【資料】\n${hojokinText}` },
