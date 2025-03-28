@@ -53,6 +53,48 @@ app.post("/webhook", async (req, res) => {
       const userMessage = event.message.text;
       const userId = event.source.userId;
 
+      // 経営相談モード開始
+      if (userMessage === "経営相談") {
+        userContext[userId] = "keiei";
+        await pushMessage(userId, "経営相談モードを開始しました。お気軽にお悩みをお話しください。\n\n※「経営相談を終了する」で通常モードに戻ります。");
+        continue;
+      }
+
+      // 経営相談モード終了
+      if (userMessage === "経営相談を終了する") {
+        delete userContext[userId];
+        await pushMessage(userId, "経営相談モードを終了しました。メニューからご希望の内容を選んでください。");
+        continue;
+      }
+
+      // 経営相談モード対応
+      if (userContext[userId] === "keiei") {
+        const keieiPrompt = fs.readFileSync("/etc/secrets/keiei_prompt.txt", "utf8");
+
+        const messages = [
+          { role: "system", content: keieiPrompt },
+          { role: "user", content: userMessage },
+        ];
+
+        const gptResponse = await axios.post(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            model: "gpt-3.5-turbo",
+            messages,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        const replyMessage = gptResponse.data.choices[0].message.content;
+        await reply(event.replyToken, { type: "text", text: replyMessage });
+        continue;
+      }
+
       // 補助金選択
       if (userMessage === "[小規模事業者持続化補助金]") {
         userContext[userId] = "/etc/secrets/hojokin_shokibo.txt";
@@ -66,32 +108,32 @@ app.post("/webhook", async (req, res) => {
         continue;
       }
 
-      // 補助金相談終了
+      // 補助金モード終了
       if (userMessage === "補助金相談を終了する") {
         delete userContext[userId];
         await pushMessage(userId, "補助金相談モードを終了しました。メニューから再度お選びください。");
         continue;
       }
 
-      // 補助金メニュー再表示
+      // 補助金メニュー表示
       if (userMessage === "補助金メニュー") {
         delete userContext[userId];
         await reply(event.replyToken, getHojokinCarousel());
         continue;
       }
 
-      // 👇 NEW: 他のメニュー選択で補助金モード終了
-      const otherMenus = ["経営相談", "業務改善Tips", "お問い合わせ"];
+      // 他のメニュー選択で補助金モード終了（経営相談を除く）
+      const otherMenus = ["業務改善Tips", "お問い合わせ"];
       if (otherMenus.includes(userMessage)) {
-        if (userContext[userId]) {
+        if (typeof userContext[userId] === "string" && userContext[userId].includes("hojokin")) {
           delete userContext[userId];
           await pushMessage(userId, "補助金相談モードを終了しました。他のご相談をどうぞ！");
         }
         continue;
       }
 
-      // 補助金選択済み
-      if (userContext[userId]) {
+      // 補助金モードでの質問処理
+      if (userContext[userId] && typeof userContext[userId] === "string" && userContext[userId].includes("hojokin")) {
         const hojokinText = fs.readFileSync(userContext[userId], "utf8");
         const systemPrompt = "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。ネット検索や憶測は禁止です。";
 
@@ -121,53 +163,18 @@ app.post("/webhook", async (req, res) => {
           text: replyMessage,
           quickReply: {
             items: [
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "よくある質問を見る",
-                  text: "よくある質問"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "申請の流れを知りたい",
-                  text: "申請の流れ"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "対象経費は？",
-                  text: "対象経費"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "補助率と上限額は？",
-                  text: "補助率と上限額"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "補助金相談を終了する",
-                  text: "補助金相談を終了する"
-                }
-              }
+              { type: "action", action: { type: "message", label: "よくある質問", text: "よくある質問" } },
+              { type: "action", action: { type: "message", label: "申請の流れ", text: "申請の流れ" } },
+              { type: "action", action: { type: "message", label: "対象経費", text: "対象経費" } },
+              { type: "action", action: { type: "message", label: "補助率と上限額", text: "補助率と上限額" } },
+              { type: "action", action: { type: "message", label: "補助金相談を終了する", text: "補助金相談を終了する" } }
             ]
           }
         });
         continue;
       }
 
-      // 通常会話
+      // 通常モード（汎用）
       const systemPrompt = process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
 
       const gptResponse = await axios.post(
@@ -195,7 +202,7 @@ app.post("/webhook", async (req, res) => {
   res.sendStatus(200);
 });
 
-// LINEへの返信
+// LINEへの返信関数
 const reply = async (replyToken, message) => {
   await axios.post(
     "https://api.line.me/v2/bot/message/reply",
@@ -241,46 +248,11 @@ const pushMessageWithQuickReply = async (to, message) => {
           text: message,
           quickReply: {
             items: [
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "よくある質問を見る",
-                  text: "よくある質問"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "申請の流れを知りたい",
-                  text: "申請の流れ"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "対象経費は？",
-                  text: "対象経費"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "補助率と上限額は？",
-                  text: "補助率と上限額"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "補助金相談を終了する",
-                  text: "補助金相談を終了する"
-                }
-              }
+              { type: "action", action: { type: "message", label: "よくある質問", text: "よくある質問" } },
+              { type: "action", action: { type: "message", label: "申請の流れ", text: "申請の流れ" } },
+              { type: "action", action: { type: "message", label: "対象経費", text: "対象経費" } },
+              { type: "action", action: { type: "message", label: "補助率と上限額", text: "補助率と上限額" } },
+              { type: "action", action: { type: "message", label: "補助金相談を終了する", text: "補助金相談を終了する" } }
             ]
           }
         }
@@ -295,7 +267,6 @@ const pushMessageWithQuickReply = async (to, message) => {
   );
 };
 
-// Web上で確認用
 app.get("/", (req, res) => {
   res.send("LINE ChatGPT Bot is running!");
 });
@@ -304,4 +275,3 @@ const port = process.env.PORT || 3000;
 app.listen(port, "0.0.0.0", () => {
   console.log(`Bot is running on port ${port}`);
 });
-
