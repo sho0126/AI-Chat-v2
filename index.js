@@ -53,7 +53,6 @@ app.post("/webhook", async (req, res) => {
       const userMessage = event.message.text;
       const userId = event.source.userId;
 
-      // 補助金選択
       if (userMessage === "[小規模事業者持続化補助金]") {
         userContext[userId] = "/etc/secrets/hojokin_shokibo.txt";
         await pushMessageWithQuickReply(userId, "小規模事業者持続化補助金を選択しました。ご質問をどうぞ！");
@@ -66,21 +65,18 @@ app.post("/webhook", async (req, res) => {
         continue;
       }
 
-      // 補助金相談終了
       if (userMessage === "補助金相談を終了する") {
         delete userContext[userId];
         await pushMessage(userId, "補助金相談モードを終了しました。メニューから再度お選びください。");
         continue;
       }
 
-      // カルーセル表示（選び直し）
       if (userMessage === "補助金メニュー") {
         delete userContext[userId];
         await reply(event.replyToken, getHojokinCarousel());
         continue;
       }
 
-      // 補助金選択済み → .txt参照回答
       if (userContext[userId]) {
         const hojokinText = fs.readFileSync(userContext[userId], "utf8");
         const systemPrompt =
@@ -107,90 +103,17 @@ app.post("/webhook", async (req, res) => {
 
         const replyMessage = gptResponse.data.choices[0].message.content;
 
-        await reply(event.replyToken, { type: "text", text: replyMessage });
-        continue;
-      }
-
-      // 通常会話
-      const systemPrompt = process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
-
-      const gptResponse = await axios.post(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          model: "gpt-3.5-turbo",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage },
-          ],
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      const replyMessage = gptResponse.data.choices[0].message.content;
-      await reply(event.replyToken, { type: "text", text: replyMessage });
-    }
-  }
-
-  res.sendStatus(200);
-});
-
-// 通常返信
-const reply = async (replyToken, message) => {
-  await axios.post(
-    "https://api.line.me/v2/bot/message/reply",
-    {
-      replyToken,
-      messages: [message],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-};
-
-// 通常Push
-const pushMessage = async (to, message) => {
-  await axios.post(
-    "https://api.line.me/v2/bot/message/push",
-    {
-      to,
-      messages: [{ type: "text", text: message }],
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    }
-  );
-};
-
-// QuickReply付きPush
-const pushMessageWithQuickReply = async (to, message) => {
-  await axios.post(
-    "https://api.line.me/v2/bot/message/push",
-    {
-      to,
-      messages: [
-        {
+        await reply(event.replyToken, {
           type: "text",
-          text: message,
+          text: replyMessage,
           quickReply: {
             items: [
               {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "よくある質問を見る",
-                  text: "よくある質問"
+                  label: "補助金相談を終了する",
+                  text: "補助金相談を終了する"
                 }
               },
               {
@@ -221,8 +144,124 @@ const pushMessageWithQuickReply = async (to, message) => {
                 type: "action",
                 action: {
                   type: "message",
+                  label: "よくある質問を見る",
+                  text: "よくある質問"
+                }
+              }
+            ]
+          }
+        });
+        continue;
+      }
+
+      const systemPrompt = process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
+
+      const gptResponse = await axios.post(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          model: "gpt-3.5-turbo",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage },
+          ],
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const replyMessage = gptResponse.data.choices[0].message.content;
+      await reply(event.replyToken, { type: "text", text: replyMessage });
+    }
+  }
+
+  res.sendStatus(200);
+});
+
+const reply = async (replyToken, message) => {
+  await axios.post(
+    "https://api.line.me/v2/bot/message/reply",
+    {
+      replyToken,
+      messages: [message],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+};
+
+const pushMessage = async (to, message) => {
+  await axios.post(
+    "https://api.line.me/v2/bot/message/push",
+    {
+      to,
+      messages: [{ type: "text", text: message }],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+};
+
+const pushMessageWithQuickReply = async (to, message) => {
+  await axios.post(
+    "https://api.line.me/v2/bot/message/push",
+    {
+      to,
+      messages: [
+        {
+          type: "text",
+          text: message,
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
                   label: "補助金相談を終了する",
                   text: "補助金相談を終了する"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "申請の流れを知りたい",
+                  text: "申請の流れ"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "対象経費は？",
+                  text: "対象経費"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "補助率と上限額は？",
+                  text: "補助率と上限額"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "よくある質問を見る",
+                  text: "よくある質問"
                 }
               }
             ]
@@ -238,7 +277,6 @@ const pushMessageWithQuickReply = async (to, message) => {
     }
   );
 };
-
 
 app.get("/", (req, res) => {
   res.send("LINE ChatGPT Bot is running!");
