@@ -73,7 +73,10 @@ const route = async (event, userMessage, userId, userContext) => {
     // 補助金モード終了
     if (userMessage === "補助金相談を終了する") {
       delete userContext[userId];
-      await pushMessage(userId, "補助金相談モードを終了しました。メニューから再度お選びください。");
+      await pushMessage(userId, {
+        type: "text",
+        text: "補助金相談モードを終了しました。メニューから再度お選びください。"
+      });
       return true;
     }
 
@@ -131,4 +134,3 @@ const route = async (event, userMessage, userId, userContext) => {
 };
 
 module.exports = { route };
-
