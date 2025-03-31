@@ -1,12 +1,15 @@
 const fs = require("fs");
 const axios = require("axios");
+const { reply } = require("../utils/replyHelper"); // 共通返信関数を利用
 
-const handleKeieiConsult = async (userMessage, userId, reply) => {
+const route = async (event, userMessage, userId, userContext) => {
+  if (userContext[userId] !== "keiei") return false;
+
   try {
-    // シークレットファイルからプロンプト読み込み
+    // keiei_prompt.txt 読み込み
     const keieiPrompt = fs.readFileSync("/etc/secrets/keiei_prompt.txt", "utf8");
 
-    // 経営相談用のSystem Prompt（全体ルール）
+    // System Prompt（ルール定義）
     const systemPrompt = `
 あなたは経営コンサルタントであり、中小企業診断士です。
 LINE Botとして、経営者と信頼関係を築きながら課題抽出・改善提案・KPI設計まで行ってください。
@@ -17,14 +20,12 @@ LINE Botとして、経営者と信頼関係を築きながら課題抽出・改
 ・改行を適切に使い、読みやすい文章構成にしてください。
 `;
 
-    // ChatGPTに送るメッセージ構成
     const messages = [
       { role: "system", content: systemPrompt },
-      { role: "user", content: keieiPrompt }, // これは「参考資料」として渡す
+      { role: "user", content: keieiPrompt },
       { role: "user", content: userMessage },
     ];
 
-    // OpenAI API 呼び出し
     const gptResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -41,13 +42,20 @@ LINE Botとして、経営者と信頼関係を築きながら課題抽出・改
 
     const replyMessage = gptResponse.data.choices[0].message.content;
 
-    // LINE Bot に返信
-    await reply({ type: "text", text: replyMessage });
+    await reply(event.replyToken, {
+      type: "text",
+      text: replyMessage,
+    });
 
-  } catch (error) {
-    console.error("経営相談処理エラー:", error);
-    await reply({ type: "text", text: "申し訳ありません、経営相談の処理中にエラーが発生しました。" });
+    return true;
+  } catch (err) {
+    console.error("経営相談Botエラー:", err);
+    await reply(event.replyToken, {
+      type: "text",
+      text: "経営相談の処理中にエラーが発生しました。",
+    });
+    return true; // 処理は試みたので true を返す
   }
 };
 
-module.exports = { handleKeieiConsult };
+module.exports = { route };
