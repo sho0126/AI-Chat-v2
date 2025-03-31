@@ -21,6 +21,68 @@ app.post("/webhook", async (req, res) => {
       const userMessage = event.message.text;
       const userId = event.source.userId;
 
+      // ✅ ミニ相談モード開始
+      if (userMessage === "ミニ相談") {
+        userContext[userId] = "mini";
+        await reply(event.replyToken, {
+          type: "text",
+          text: "ご相談カテゴリを選んでください！",
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "売上・販売戦略",
+                  text: "[ミニ相談] 売上・販売戦略"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "人材・組織",
+                  text: "[ミニ相談] 人材・組織"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "商品・サービス",
+                  text: "[ミニ相談] 商品・サービス"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "資金繰り・調達",
+                  text: "[ミニ相談] 資金繰り・調達"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "情報共有・DX",
+                  text: "[ミニ相談] 情報共有・DX"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "経営者の悩み",
+                  text: "[ミニ相談] 経営者の悩み"
+                }
+              }
+            ]
+          }
+        });
+        continue;
+      }
+
       // 各モードのルーティング
       if (await hojokinSupport.route(event, userMessage, userId, userContext)) continue;
       if (await keieiConsult.route(event, userMessage, userId, userContext)) continue;
@@ -96,4 +158,3 @@ const port = process.env.PORT || 3000;
 app.listen(port, "0.0.0.0", () => {
   console.log(`Bot is running on port ${port}`);
 });
-
