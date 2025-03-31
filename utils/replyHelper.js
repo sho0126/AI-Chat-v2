@@ -16,4 +16,23 @@ const reply = async (replyToken, message) => {
   );
 };
 
-module.exports = { reply };
+const pushMessage = async (to, message) => {
+  await axios.post(
+    "https://api.line.me/v2/bot/message/push",
+    {
+      to,
+      messages: [message],
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+};
+
+module.exports = {
+  reply,
+  pushMessage, // ← これを追加！
+};
