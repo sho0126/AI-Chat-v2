@@ -2,9 +2,7 @@ const fs = require("fs");
 const axios = require("axios");
 const { reply, pushMessageWithQuickReply, pushMessage } = require("../utils/replyHelper");
 
-const route = async (event, userMessage, userContext) => {
-  const userId = event.source.userId;
-
+const route = async (event, userMessage, userId, userContext) => {
   // 小規模事業者持続化補助金
   if (userMessage === "[小規模事業者持続化補助金]") {
     userContext[userId] = "/etc/secrets/hojokin_shokibo.txt";
@@ -26,44 +24,27 @@ const route = async (event, userMessage, userContext) => {
     return true;
   }
 
-  // 補助金メニュー表示
-  if (userMessage === "補助金メニュー") {
-    delete userContext[userId];
-    await reply(event.replyToken, getHojokinCarousel());
-    return true;
-  }
-
-  // モード切り替え（補助金 → 他メニュー）
-  const otherMenus = ["経営相談", "業務改善Tips", "お問い合わせ"];
-  if (otherMenus.includes(userMessage)) {
-    if (typeof userContext[userId] === "string" && userContext[userId].includes("hojokin")) {
-      delete userContext[userId];
-      await pushMessage(userId, "補助金相談モードを終了しました。他のご相談をどうぞ！");
-    }
-    return false;
-  }
-
-  // 補助金モード中の質問処理
+  // 補助金モード中のやりとり
   if (userContext[userId] && typeof userContext[userId] === "string" && userContext[userId].includes("hojokin")) {
     const hojokinText = fs.readFileSync(userContext[userId], "utf8");
     const systemPrompt = "あなたは補助金専門のAIアシスタントです。以下の資料（.txt）のみを参照して回答してください。資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。ネット検索や憶測は禁止です。";
 
     const messages = [
       { role: "system", content: `${systemPrompt}\n\n【資料】\n${hojokinText}` },
-      { role: "user", content: userMessage },
+      { role: "user", content: userMessage }
     ];
 
     const gptResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
         model: "gpt-3.5-turbo",
-        messages,
+        messages
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
+          "Content-Type": "application/json"
+        }
       }
     );
 
@@ -86,44 +67,8 @@ const route = async (event, userMessage, userContext) => {
     return true;
   }
 
-  return false; // 他の処理に渡す
-};
-
-// カルーセルUI（補助金選択メニュー）
-const getHojokinCarousel = () => {
-  return {
-    type: "template",
-    altText: "補助金を選択してください",
-    template: {
-      type: "carousel",
-      columns: [
-        {
-          thumbnailImageUrl: "https://res.cloudinary.com/demo/image/upload/sample.jpg",
-          title: "小規模事業者持続化補助金",
-          text: "販路開拓や設備導入の補助金",
-          actions: [
-            {
-              type: "message",
-              label: "この補助金を選ぶ",
-              text: "[小規模事業者持続化補助金]",
-            },
-          ],
-        },
-        {
-          thumbnailImageUrl: "https://res.cloudinary.com/demo/image/upload/sample.jpg",
-          title: "ものづくり補助金",
-          text: "革新的サービス開発を支援",
-          actions: [
-            {
-              type: "message",
-              label: "この補助金を選ぶ",
-              text: "[ものづくり補助金]",
-            },
-          ],
-        },
-      ],
-    },
-  };
+  return false; // このモジュールで処理しなかった場合は false を返す
 };
 
 module.exports = { route };
+
