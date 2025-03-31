@@ -1,43 +1,53 @@
-// /services/miniDiagnosis.js
+const { reply } = require("../utils/replyHelper");
 
-const fs = require("fs");
-const axios = require("axios");
+const route = async (event, userMessage, userId, userContext) => {
+  if (userContext[userId] !== "mini") return false;
 
-const categorySteps = {
-  "売上・販売戦略": [
-    "売上に関して、今感じているお悩みや課題はありますか？",
-    "その課題が起きている背景や原因として、何か思い当たることはありますか？",
-    "過去にその課題に対して何か対策を講じたことはありますか？結果はどうでしたか？",
-    "どのような売上の状態が理想的だと感じていますか？",
-    "理想に近づけるために、取り組んでみたいことはありますか？"
-  ]
-  // 他カテゴリも順次追加予定
-};
+  try {
+    // 仮の簡易ロジック（ステップ1〜3の進行管理）
+    const step = userContext[`step_${userId}`] || 1;
+    let nextQuestion = "";
+    let nextStep = step;
 
-const userSteps = {}; // userId ごとにステップを管理
+    switch (step) {
+      case 1:
+        nextQuestion = "売上に関して、今感じているお悩みや課題はありますか？";
+        nextStep = 2;
+        break;
+      case 2:
+        nextQuestion = "その課題はいつ頃から感じていますか？";
+        nextStep = 3;
+        break;
+      case 3:
+        nextQuestion = "その背景や原因として思い当たる点はありますか？";
+        nextStep = 4;
+        break;
+      case 4:
+        nextQuestion = "理想の状態（目指す姿）を教えてください。";
+        nextStep = 5;
+        break;
+      default:
+        nextQuestion = "ありがとうございました！診断は以上です。必要であれば改善のアドバイスもできますよ！";
+        nextStep = 1; // リセット
+        break;
+    }
 
-const handleMiniDiagnosis = async (userId, userMessage, category, reply) => {
-  if (!userSteps[userId]) {
-    userSteps[userId] = { step: 0, category };
-  } else if (userSteps[userId].category !== category) {
-    // カテゴリが変わった場合はリセット
-    userSteps[userId] = { step: 0, category };
-  }
+    userContext[`step_${userId}`] = nextStep;
 
-  const currentStep = userSteps[userId].step;
-  const steps = categorySteps[category];
-
-  // ステップに応じた質問を送る
-  if (currentStep < steps.length) {
-    await reply({ type: "text", text: steps[currentStep] });
-    userSteps[userId].step++;
-  } else {
-    await reply({
+    await reply(event.replyToken, {
       type: "text",
-      text: "一通りのヒアリングが完了しました。他にも気になる点があれば教えてください！"
+      text: nextQuestion,
     });
-    delete userSteps[userId];
+
+    return true;
+  } catch (error) {
+    console.error("ミニ診断エラー:", error);
+    await reply(event.replyToken, {
+      type: "text",
+      text: "申し訳ありません、ミニ診断中にエラーが発生しました。",
+    });
+    return true;
   }
 };
 
-module.exports = { handleMiniDiagnosis };
+module.exports = { route };
