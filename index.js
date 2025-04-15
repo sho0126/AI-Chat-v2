@@ -1,160 +1,130 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const axios = require("axios");
-const fs = require("fs");
 require("dotenv").config();
+const fs = require("fs");
 
-const hojokinSupport = require("./services/hojokinSupport");
-const keieiConsult = require("./services/keieiConsult");
-const miniDiagnosis = require("./services/miniDiagnosis");
+const hojokinMenu = require("./services/hojokinMenu");
+const hojokinShindan = require("./services/hojokinShindan");
+const hojokinInfo = require("./services/hojokinInfo");
+const toiawase = require("./services/toiawase");
+
+const { reply } = require("./utils/replyHelper");
 
 const app = express();
 app.use(bodyParser.json());
 
-const userContext = {}; // ユーザーの状態を保持（補助金/経営相談/ミニ診断）
+const userContext = {}; // 状態保持（mode, source）
 
 app.post("/webhook", async (req, res) => {
   const events = req.body.events;
 
   for (const event of events) {
-    if (event.type === "message" && event.message.type === "text") {
-      const userMessage = event.message.text;
-      const userId = event.source.userId;
+    try {
+      if (event.type === "message" && event.message.type === "text") {
+        const userMessage = event.message.text;
+        const userId = event.source.userId;
 
-      // ✅ ミニ相談モード開始
-      if (userMessage === "ミニ相談") {
-        userContext[userId] = "mini";
-        await reply(event.replyToken, {
-          type: "text",
-          text: "ご相談カテゴリを選んでください！",
-          quickReply: {
-            items: [
+        // === モードの起点コマンド ===
+        if (userMessage === "補助金メニュー") {
+          userContext[userId] = { mode: "hojokin" };
+          await hojokinMenu.route(event, userMessage, userId, userContext);
+          continue;
+        }
+
+        if (userMessage === "補助金診断") {
+          userContext[userId] = { mode: "hojokin" };
+          await hojokinShindan.route(event, userMessage, userId, userContext);
+          continue;
+        }
+
+        if (userMessage === "補助金について知る") {
+          userContext[userId] = { mode: "hojokin" };
+          await hojokinInfo.route(event, userMessage, userId, userContext);
+          continue;
+        }
+
+        if (userMessage === "お問い合わせ") {
+          userContext[userId] = { mode: "hojokin" };
+          await toiawase.route(event, userMessage, userId, userContext);
+          continue;
+        }
+
+        // === 補助金メニュー選択・診断・自由質問・問い合わせルーティング ===
+        if (userContext[userId]?.mode === "hojokin") {
+          if (
+            await hojokinMenu.route(event, userMessage, userId, userContext) ||
+            await hojokinShindan.route(event, userMessage, userId, userContext) ||
+            await hojokinInfo.route(event, userMessage, userId, userContext) ||
+            await toiawase.route(event, userMessage, userId, userContext)
+          ) {
+            continue;
+          }
+
+          // === 補助金モード中の自由質問（.txtをもとにGPT応答） ===
+          const sourcePath = userContext[userId]?.source;
+          if (sourcePath && fs.existsSync(sourcePath)) {
+            const hojokinText = fs.readFileSync(sourcePath, "utf8");
+
+            const systemPrompt = `
+あなたは補助金専門のAIアシスタントです。
+以下の資料（.txt）のみを参照して回答してください。
+資料に記載のない内容や判断できないことについては、「わかりません」と正直に答えてください。
+ネット検索や憶測は禁止です。
+`;
+
+            const messages = [
+              { role: "system", content: `${systemPrompt}\n\n【資料】\n${hojokinText}` },
+              { role: "user", content: userMessage }
+            ];
+
+            const gptResponse = await axios.post(
+              "https://api.openai.com/v1/chat/completions",
               {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "売上・販売戦略",
-                  text: "[ミニ相談] 売上・販売戦略"
-                }
+                model: "gpt-4",
+                messages
               },
               {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "人材・組織",
-                  text: "[ミニ相談] 人材・組織"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "商品・サービス",
-                  text: "[ミニ相談] 商品・サービス"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "資金繰り・調達",
-                  text: "[ミニ相談] 資金繰り・調達"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "情報共有・DX",
-                  text: "[ミニ相談] 情報共有・DX"
-                }
-              },
-              {
-                type: "action",
-                action: {
-                  type: "message",
-                  label: "経営者の悩み",
-                  text: "[ミニ相談] 経営者の悩み"
+                headers: {
+                  Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+                  "Content-Type": "application/json"
                 }
               }
-            ]
-          }
-        });
-        continue;
-      }
+            );
 
-      // 各モードのルーティング
-      if (await hojokinSupport.route(event, userMessage, userId, userContext)) continue;
-      if (await keieiConsult.route(event, userMessage, userId, userContext)) continue;
-      if (await miniDiagnosis.route(event, userMessage, userId, userContext)) continue;
+            const replyMessage = gptResponse.data.choices[0].message.content;
+            await reply(event.replyToken, {
+              type: "text",
+              text: replyMessage
+            });
 
-      // 通常モード（共通チャット対応）
-      const systemPrompt = process.env.MY_SYSTEM_PROMPT || "あなたは優秀なLINEボットです。";
-
-      const gptResponse = await axios.post(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          model: "gpt-3.5-turbo",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage }
-          ]
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
+            continue;
           }
         }
-      );
 
-      const replyMessage = gptResponse.data.choices[0].message.content;
-      await reply(event.replyToken, { type: "text", text: replyMessage });
+        // === モード外（未設定 or 補助金外）の場合 → 無視 or 固定応答
+        await reply(event.replyToken, {
+          type: "text",
+          text: "補助金メニューからスタートしてください。\nメニューが表示されていない場合は「補助金メニュー」と入力してください。"
+        });
+      }
+    } catch (err) {
+      console.error("index.js error:", err);
+      await reply(event.replyToken, {
+        type: "text",
+        text: "エラーが発生しました。しばらくしてから再度お試しください。"
+      });
     }
   }
 
   res.sendStatus(200);
 });
 
-// 共通返信関数
-const reply = async (replyToken, message) => {
-  await axios.post(
-    "https://api.line.me/v2/bot/message/reply",
-    {
-      replyToken,
-      messages: [message]
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
-      }
-    }
-  );
-};
-
-// Push関数（任意で使用可能）
-const pushMessage = async (to, message) => {
-  await axios.post(
-    "https://api.line.me/v2/bot/message/push",
-    {
-      to,
-      messages: [{ type: "text", text: message }]
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`,
-        "Content-Type": "application/json"
-      }
-    }
-  );
-};
-
 app.get("/", (req, res) => {
-  res.send("LINE ChatGPT Bot is running!");
+  res.send("補助金Bot is running!");
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, "0.0.0.0", () => {
+app.listen(port, () => {
   console.log(`Bot is running on port ${port}`);
 });
